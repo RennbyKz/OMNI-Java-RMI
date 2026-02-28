@@ -1,5 +1,4 @@
 package server;
-
 import common.InventoryService;
 import java.rmi.RemoteException;
 import java.rmi.server.UnicastRemoteObject;
@@ -15,7 +14,8 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     // AUTHENTICATION (Login Logic) ---
     @Override
     public String[] login(String username, String password) throws RemoteException {
-        // SQL ထဲတွင် u.user_id ကိုပါ ထည့်သွင်းဆွဲထုတ်ရန် ပြင်ဆင်ခြင်း
+        System.out.println("\n[Client Request]: အကောင့်ဝင်ရန် ကြိုးပမ်းမှု - အသုံးပြုသူအမည်: " + username);
+
         String sql = "SELECT u.user_id, u.password_hash, r.role_name, u.branch_id, u.supplier_id, b.branch_name " +
                 "FROM users u " +
                 "JOIN roles r ON u.role_id = r.role_id " +
@@ -30,22 +30,27 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                 if (rs.next()) {
                     String storedHash = rs.getString("password_hash");
 
+                    // Compatibility for PHP password hashes
                     if (storedHash != null && storedHash.startsWith("$2y$")) {
                         storedHash = storedHash.replaceFirst("\\$2y\\$", "\\$2a\\$");
                     }
 
                     if (storedHash != null && BCrypt.checkpw(password, storedHash)) {
+                        System.out.println("<<< [Success]: Authentication passed for " + username + " [" + rs.getString("role_name") + "]");
                         return new String[]{
                                 rs.getString("role_name"),   // [0]
                                 rs.getString("branch_id"),   // [1]
                                 rs.getString("supplier_id"), // [2]
-                                rs.getString("branch_name"),  // [3]
-                                rs.getString("user_id")      // [4] ⭐ အသစ်ထည့်လိုက်သော User ID
+                                rs.getString("branch_name"), // [3]
+                                rs.getString("user_id")      // [4]
                         };
                     }
                 }
             }
-        } catch (SQLException e) { e.printStackTrace(); }
+            System.out.println("<<< [ငြင်းပယ်သည်]: အသုံးပြုသူအမည် သို့မဟုတ် လျှို့ဝှက်နံပါတ် မှားယွင်းနေသည်။");
+        } catch (SQLException e) {
+            System.err.println("Database Error in Login: " + e.getMessage());
+        }
         return null;
     }
 
@@ -53,6 +58,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     // --- 1.DASHBOARD ANALYTICS ---
     @Override
     public Map<String, Object> getDashboardStats() throws RemoteException {
+        System.out.println("[Client Request]: ပင်မစာမျက်နှာအတွက် အစီရင်ခံစာများ တွက်ချက်နေပါသည်။");
         Map<String, Object> stats = new HashMap<>();
         try (Connection conn = DBConnection.getConnection()) {
             ResultSet rs = conn.createStatement().executeQuery("SELECT SUM(quantity * price), SUM(quantity) FROM products");
@@ -69,36 +75,30 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public List<String[]> getRecentInventorySync() throws RemoteException {
+        System.out.println("[RMI Call]: Fetching Latest Inventory Sync (Top 5)...");
         List<String[]> list = new ArrayList<>();
-
-        // ⭐ SQL ကို သင့် Database table နာမည်တွေနဲ့ ကိုက်ညီအောင် စစ်ပါ
-        // ဤနေရာတွင် products table မှ နောက်ဆုံးသွင်းထားသော ၅ ခုကို ယူပါမည်
         String sql = "SELECT product_name, quantity, price FROM products ORDER BY product_id DESC LIMIT 5";
 
         try (Connection conn = DBConnection.getConnection();
              Statement stmt = conn.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
-
             while (rs.next()) {
-                // String array ထဲသို့ ဒေတာထည့်ခြင်း [0]=Name, [1]=Qty, [2]=Price
                 list.add(new String[]{
                         rs.getString("product_name"),
                         rs.getString("quantity"),
-                        String.format("%,.2f", rs.getDouble("price")) // ဈေးနှုန်းကို format လုပ်ခြင်း
+                        String.format("%,.2f", rs.getDouble("price"))
                 });
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
-
-        // အကယ်၍ ဒေတာမရှိပါက empty list ပြန်ပို့မည်
+        } catch (SQLException e) { e.printStackTrace(); }
         return list;
     }
+
     //--- End Dashboard ---
 
     // --- 2.INVENTORY CORE OPERATIONS ---
     @Override
     public List<String[]> getInventory() throws RemoteException {
+        System.out.println("[Client Request]: ကုန်ပစ္စည်းလက်ကျန်စာရင်း တစ်ခုလုံးကို ဆွဲထုတ်နေပါသည်။");
         List<String[]> items = new ArrayList<>();
 
         String sql = "SELECT p.product_id, p.product_name, p.quantity, p.price, b.branch_name, " +
@@ -137,6 +137,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                                 String category, String metadata, String imageUrl) throws RemoteException {
 
         // metadata::jsonb ဟု သတ်မှတ်ပေးရမည်
+        System.out.println("\n[Client Request]: ပစ္စည်းအသစ်ထည့်သွင်းခြင်း - " + name);
         String sql = "INSERT INTO products (product_name, price, quantity, branch_id, supplier_id, category, metadata, image_url) " +
                 "VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?)";
 
@@ -152,12 +153,15 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             pstmt.setString(7, (metadata == null || metadata.isEmpty()) ? "{}" : metadata);
             pstmt.setString(8, (imageUrl == null || imageUrl.isEmpty()) ? "assets/uploads/products/default.png" : imageUrl);
 
-            return pstmt.executeUpdate() > 0;
+            boolean success = pstmt.executeUpdate() > 0;
+            if (success) System.out.println("<<< [အောင်မြင်သည်]: ပစ္စည်းအသစ် '" + name + "' ကို Database ထဲသို့ ထည့်သွင်းပြီးပါပြီ။");
+            return success;
         } catch (SQLException e) { e.printStackTrace(); return false; }
     }
 
     @Override
     public boolean updateInventory(int id, String name, int qty, double price, int bId, int sId, String cat, String meta, String imageUrl) throws RemoteException {
+        System.out.println("\n[Client Request]: ပစ္စည်းအချက်အလက် ပြင်ဆင်ခြင်း - ID: " + id);
         try (Connection conn = DBConnection.getConnection()) {
             String sql;
             if (imageUrl != null && !imageUrl.isEmpty()) {
@@ -182,8 +186,9 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             } else {
                 ps.setInt(8, id);
             }
-
-            return ps.executeUpdate() > 0;
+            boolean success = ps.executeUpdate() > 0;
+            if (success) System.out.println("<<< [အောင်မြင်သည်]: ID " + id + " ၏ အချက်အလက်များကို Update လုပ်ပြီးပါပြီ။");
+            return success;
         } catch (Exception e) {
             e.printStackTrace();
             return false;
@@ -192,12 +197,15 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public boolean deleteInventory(int id) throws RemoteException {
+        System.out.println("\n[Client Request]: ပစ္စည်းဖျက်သိမ်းခြင်း - ID: " + id);
         String sql = "DELETE FROM products WHERE product_id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setInt(1, id);
-            return pstmt.executeUpdate() > 0;
+            boolean success = pstmt.executeUpdate() > 0;
+            if (success) System.out.println("<<< [အောင်မြင်သည်]: ပစ္စည်းကို စနစ်အတွင်းမှ ဖယ်ရှားပြီးပါပြီ။");
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -210,7 +218,6 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     @Override
     public List<String[]> getBranches() throws RemoteException {
         List<String[]> branches = new ArrayList<>();
-        // ⭐ SQL မှာ id, name, location, status ၄ ခုလုံးကို ဆွဲထုတ်ပါ
         String sql = "SELECT branch_id, branch_name, location, status FROM branches";
         try (Connection conn = DBConnection.getConnection();
              Statement stmt = conn.createStatement();
@@ -230,6 +237,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     // Branch Add and Edit
     @Override
     public boolean saveBranch(String id, String name, String loc) throws RemoteException {
+        System.out.println("\n[Admin Request]: ဌာနခွဲ (Branch) အချက်အလက် ပြင်ဆင်ခြင်း/အသစ်ဖွင့်ခြင်း - " + name);
         try (Connection conn = DBConnection.getConnection()) {
 
             boolean isInsert = (id == null || id.trim().isEmpty() || "null".equalsIgnoreCase(id));
@@ -249,7 +257,9 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                     ps.setString(1, name);
                     ps.setString(2, loc);
                     ps.setInt(3, Integer.parseInt(id));
-                    return ps.executeUpdate() > 0;
+                    boolean success = ps.executeUpdate() > 0;
+                    if(success) System.out.println("<<< [အောင်မြင်သည်]: Distributed Node (" + name + ") Configuration ကို Update လုပ်ပြီးပါပြီ။");
+                    return success;
                 }
             }
         } catch (SQLException e) {
@@ -334,6 +344,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public boolean saveSupplier(String id, String name, String address, String phone, String email, String contactPerson) throws RemoteException {
+        System.out.println("\n[Admin Request]: ကုန်သွင်းသူ (Supplier) အချက်အလက် သိမ်းဆည်းခြင်း - " + name);
         String infoJson = String.format("{\"address\": \"%s\", \"phone\": \"%s\", \"email\": \"%s\"}", address, phone, email);
 
         try (Connection conn = DBConnection.getConnection()) {
@@ -343,6 +354,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             if (id == null || id.trim().isEmpty() || id.equals("null")) {
                 // INSERT: contact_person ကို တိုက်ရိုက်ထည့်ပါ
                 String sql = "INSERT INTO suppliers (name, info, contact_person) VALUES (?, ?::jsonb, ?) RETURNING supplier_id";
+                System.out.println(">>> ကုန်သွင်းသူအသစ်အတွက် Portal အကောင့် ဖန်တီးနေပါသည်။");
                 PreparedStatement ps = conn.prepareStatement(sql);
                 ps.setString(1, name); ps.setString(2, infoJson); ps.setString(3, contactPerson);
                 ResultSet rs = ps.executeQuery();
@@ -368,11 +380,12 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                 success = ps.executeUpdate() > 0;
             }
             conn.commit();
+            if(success) System.out.println("<<< [အောင်မြင်သည်]: ကုန်သွင်းသူစာရင်းနှင့် Portal Access အကောင့်များကို တစ်ပြိုင်နက် Update လုပ်ပြီးပါပြီ။");
             return success;
         } catch (Exception e) { e.printStackTrace(); return false; }
     }
 
-    // --- ⭐ Fixed Delete Supplier Logic ---
+    // --- Delete Supplier Logic ---
     @Override
     public boolean deleteSupplier(int id) throws RemoteException {
         // ၁။ Users table မှာ ချိတ်ဆက်နေတဲ့ supplier_id ကို အရင် NULL ပြောင်းပေးရပါမယ်
@@ -455,6 +468,8 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     @Override
     public boolean transferStock(int fromBranch, int toBranch, int productId, int qty, int userId) throws RemoteException {
         // try-with-resources ကိုသုံးခြင်းဖြင့် conn.close() ကို manual ပိတ်စရာမလိုတော့ပါ
+        System.out.println("\n[Client Request]: ဌာနခွဲအချင်းချင်း ပစ္စည်းလွှဲပြောင်းခြင်း စတင်နေပါသည်။");
+        System.out.println("အသေးစိတ်: ပစ္စည်း ID " + productId + " [" + qty + " ခု] ကို ဌာန " + fromBranch + " မှ ဌာန " + toBranch + " သို့ လွှဲပြောင်းမည်။");
         try (Connection conn = DBConnection.getConnection()) {
 
             // ⭐ PostgreSQL အတွက် CALL syntax ကို တိုက်ရိုက်သုံးပါ
@@ -468,6 +483,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                 cs.setInt(5, userId);
 
                 cs.execute();
+                System.out.println("<<< [အောင်မြင်သည်]: Database ရှိ Stored Procedure ကို အသုံးပြု၍ လွှဲပြောင်းမှု ပြီးမြောက်ပါသည်။");
                 return true;
             }
         } catch (SQLException e) {
@@ -517,6 +533,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public boolean approveRequest(int requestId, String adminUsername) throws RemoteException {
+        System.out.println("\n[Client Request]: အမှာစာ အတည်ပြုခြင်း - Request ID: " + requestId);
         String sql = "UPDATE stock_requests SET status = 'APPROVED', " +
                 "approved_by = (SELECT user_id FROM users WHERE username = ?) " +
                 "WHERE request_id = ?";
@@ -524,7 +541,9 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, adminUsername);
             ps.setInt(2, requestId);
-            return ps.executeUpdate() > 0;
+            boolean success = ps.executeUpdate() > 0;
+            if (success) System.out.println("<<< [အောင်မြင်သည်]: အမှာစာကို အတည်ပြုပြီးပါပြီ။");
+            return success;
         } catch (SQLException e) { e.printStackTrace(); return false; }
     }
 
@@ -618,6 +637,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     @Override
     public boolean receiveShipment(int requestId, int actualQty) throws RemoteException {
         Connection conn = null;
+        System.out.println("\n[Client Request]: ပစ္စည်းရောက်ရှိကြောင်း အတည်ပြုခြင်း - ID: " + requestId);
         try {
             conn = DBConnection.getConnection();
             conn.setAutoCommit(false);
@@ -647,6 +667,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                 psStock.executeUpdate();
 
                 conn.commit();
+                System.out.println("<<< [အောင်မြင်သည်]: ပစ္စည်းလက်ခံရရှိမှု မှတ်တမ်းတင်ပြီး လက်ကျန်စာရင်းကို တိုးမြှင့်ပြီးပါပြီ။");
                 return true;
             }
         } catch (SQLException e) { if (conn != null) try { conn.rollback(); } catch (Exception ex) {} e.printStackTrace(); }
@@ -709,6 +730,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     }
     @Override
     public boolean saveUser(String id, String username, int roleId, String branchId) throws RemoteException {
+        System.out.println("\n[Client Request]: အသုံးပြုသူအသစ်/ပြင်ဆင်ခြင်း ဆောင်ရွက်နေပါသည်။ - " + username);
         try (Connection conn = DBConnection.getConnection()) {
             if (id != null && !id.isEmpty()) {
                 // Update User
@@ -774,6 +796,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     //--- 11.Audit Logs ---
     @Override
     public List<String[]> getAllLogs(String branchId, String date) throws RemoteException {
+        System.out.println("[Client Request]: စနစ်လုပ်ဆောင်ချက် မှတ်တမ်းများကို ဆွဲထုတ်နေပါသည်။");
         List<String[]> logs = new ArrayList<>();
         StringBuilder sql = new StringBuilder(
                 "SELECT l.*, u.username, b.branch_name FROM audit_logs l " +
@@ -830,6 +853,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     //Manager Dashboard
     @Override
     public Map<String, Object> getManagerStats(int branchId) throws RemoteException {
+        System.out.println("\n[Manager Request]: ဌာနခွဲ ID (" + branchId + ") အတွက် အစီရင်ခံစာများ တွက်ချက်နေပါသည်။");
         Map<String, Object> stats = new HashMap<>();
         try (Connection conn = DBConnection.getConnection()) {
             // ၁။ SKU အရေအတွက်နှင့် စုစုပေါင်းတန်ဖိုး (PHP Logic ၁ အတိုင်း)
@@ -837,6 +861,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             try (PreparedStatement ps = conn.prepareStatement(sqlStats)) {
                 ps.setInt(1, branchId);
                 ResultSet rs = ps.executeQuery();
+                System.out.println(">>> ဌာနခွဲ၏ လက်ရှိပစ္စည်းအမျိုးအမည်နှင့် စုစုပေါင်းတန်ဖိုးကို တွက်ချက်ပြီးပါပြီ။");
                 if (rs.next()) {
                     stats.put("skus", rs.getInt("skus"));
                     stats.put("totalValuation", rs.getDouble("val"));
@@ -916,19 +941,23 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     @Override
     public boolean createStockRequest(int supplierId, String productName, int quantity, int branchId, String remark) throws RemoteException {
         // PHP Logic အတိုင်း status ကို 'PENDING' ဟု သတ်မှတ်၍ ထည့်သွင်းခြင်း
+        System.out.println("\n[Manager Request]: အမှာစာအသစ် တင်သွင်းခြင်း - " + productName);
+        System.out.println("အသေးစိတ်: ဌာနခွဲ (" + branchId + ") မှ Supplier (" + supplierId + ") ဆီသို့ [" + quantity + "] ခု မှာယူပါသည်။");
         String sql = "INSERT INTO stock_requests (supplier_id, product_name, quantity, branch_id, remark, status, requested_at) " +
                     "VALUES (?, ?, ?, ?, ?, 'PENDING', CURRENT_TIMESTAMP)";
-        
+
         try (Connection conn = DBConnection.getConnection();
             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
+
             ps.setInt(1, supplierId);
             ps.setString(2, productName);
             ps.setInt(3, quantity);
             ps.setInt(4, branchId);
             ps.setString(5, remark);
-            
-            return ps.executeUpdate() > 0;
+
+            boolean success = ps.executeUpdate() > 0;
+            if (success) System.out.println("<<< [အောင်မြင်သည်]: အမှာစာကို မှတ်တမ်းတင်ပြီး Supplier ဆီသို့ ချိတ်ဆက်ပေးလိုက်ပါပြီ။");
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -950,10 +979,10 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     public boolean wipeBranchHistory(int branchId) throws RemoteException {
         // PHP: DELETE FROM stock_requests WHERE branch_id = ?
         String sql = "DELETE FROM stock_requests WHERE branch_id = ?";
-        
+
         try (Connection conn = DBConnection.getConnection();
             PreparedStatement ps = conn.prepareStatement(sql)) {
-            
+
             ps.setInt(1, branchId);
             return ps.executeUpdate() > 0;
         } catch (SQLException e) {
@@ -985,6 +1014,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public List<String[]> getBranchStaffWithActivity(int branchId) throws RemoteException {
+        System.out.println("\n[Manager Request]: ဌာနခွဲ ID (" + branchId + ") ရှိ ဝန်ထမ်းများ၏ လှုပ်ရှားမှုမှတ်တမ်းကို စစ်ဆေးနေပါသည်။");
         List<String[]> staffList = new ArrayList<>();
         // Role ID 3 (StockKeeper) များကိုသာ ဆွဲထုတ်ခြင်း
         String sql = "SELECT u.user_id, u.username, u.status, " +
@@ -1006,6 +1036,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                 });
             }
         } catch (SQLException e) { e.printStackTrace(); }
+        System.out.println("<<< [အောင်မြင်သည်]: ဝန်ထမ်းများ၏ နောက်ဆုံးအခြေအနေ (Last Seen) ကို ပေးပို့လိုက်ပါပြီ။");
         return staffList;
     }
 
@@ -1142,6 +1173,8 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     }
     @Override
     public List<String[]> getStockRequestsBySupplier(int supplierId, String status) throws RemoteException {
+        System.out.println("\n[Supplier Request]: မိမိဆီသို့ မှာယူထားသော အော်ဒါများကို စစ်ဆေးနေပါသည်။");
+        System.out.println("အသေးစိတ်: Supplier ID (" + supplierId + ") အတွက် '" + status + "' အခြေအနေရှိသော ဒေတာများကို ရယူနေသည်။");
         List<String[]> list = new ArrayList<>();
 
         // SQL Query: Supplier ID အလိုက် ဆိုင်ခွဲအမည်နှင့်တကွ ဆွဲထုတ်ခြင်း
@@ -1180,10 +1213,13 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             e.printStackTrace();
             throw new RemoteException("Database Error in getStockRequestsBySupplier: " + e.getMessage());
         }
+        System.out.println("<<< [အောင်မြင်သည်]: အော်ဒါစာရင်းများကို Supplier Node ဆီသို့ ပေးပို့လိုက်ပါပြီ။");
         return list;
     }
     @Override
     public boolean updateStockRequestStatus(int requestId, String status) throws RemoteException {
+        System.out.println("\n[Supplier Request]: အမှာစာ အခြေအနေ (Status) ပြောင်းလဲနေပါသည်။");
+        System.out.println("အသေးစိတ်: Request ID (" + requestId + ") ကို '" + status + "' အဖြစ်သို့ ပြောင်းလဲမည်။");
         String sql = "UPDATE stock_requests SET status = ? WHERE request_id = ?";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -1191,7 +1227,11 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
             ps.setString(1, status);
             ps.setInt(2, requestId);
 
-            return ps.executeUpdate() > 0;
+            boolean success = ps.executeUpdate() > 0;
+            if (success) {
+                System.out.println("<<< [အောင်မြင်သည်]: Status ပြောင်းလဲမှု ပြီးမြောက်ပါသည်။ Manager ဘက်တွင် ချက်ချင်းမြင်ရမည်ဖြစ်သည်။");
+            }
+            return success;
         } catch (SQLException e) {
             e.printStackTrace();
             return false;
@@ -1284,6 +1324,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
         return false;
     }
     private void logActivity(int userId, String action) {
+        System.out.println("[Log မှတ်တမ်း]: အသုံးပြုသူ " + userId + " က " + action + " ကို ဆောင်ရွက်ခဲ့သည်။");
         String sql = "INSERT INTO audit_logs (user_id, action, timestamp) VALUES (?, ?, CURRENT_TIMESTAMP)";
         try (Connection conn = DBConnection.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql)) {
@@ -1301,6 +1342,8 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     @Override
     public boolean addStock(int productId, int qty, int branchId, int userId, String productName) throws RemoteException {
         // Transaction အနေဖြင့် အလုပ်လုပ်ရန်
+        System.out.println("\n[Storekeeper Request]: ပစ္စည်းအဝင် (Inbound) မှတ်တမ်းတင်နေပါသည်။");
+        System.out.println("အသေးစိတ်: " + productName + " [" + qty + " ခု] ကို ဌာနခွဲ ID (" + branchId + ") ထဲသို့ ထည့်သွင်းမည်။");
         String updateSql = "UPDATE products SET quantity = quantity + ? WHERE product_id = ? AND branch_id = ?";
 
         try (Connection conn = DBConnection.getConnection()) {
@@ -1316,6 +1359,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                     // အရင်က ရေးခဲ့သော logActivity method ကို ပြန်သုံးခြင်း
                     logActivity(userId, "Inbound: Received " + qty + " units for @" + productName);
                     conn.commit();
+                    System.out.println("<<< [အောင်မြင်သည်]: လက်ကျန်စာရင်းကို တိုးမြှင့်ပြီး Log မှတ်တမ်းတင်ပြီးပါပြီ။");
                     return true;
                 }
                 conn.rollback();
@@ -1344,6 +1388,8 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     // ၂။ ပစ္စည်းထုတ်ယူခြင်း (Validation ပါဝင်သည်)
     @Override
     public String removeStock(int pid, int outQty, int branchId, int userId, String pname) throws RemoteException {
+        System.out.println("\n[Storekeeper Request]: ပစ္စည်းထုတ်ယူခြင်း (Outbound) ဆောင်ရွက်နေပါသည်။");
+        System.out.println("အသေးစိတ်: " + pname + " [" + outQty + " ခု] ကို ထုတ်ယူရန် စစ်ဆေးနေပါသည်။");
         try (Connection conn = DBConnection.getConnection()) {
             // ပစ္စည်းလက်ကျန် စစ်ဆေးခြင်း
             String checkSql = "SELECT quantity FROM products WHERE product_id = ? AND branch_id = ?";
@@ -1364,8 +1410,10 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                     psUpdate.executeUpdate();
 
                     logActivity(userId, "Outbound: Dispatched " + outQty + " units of @" + pname);
+                    System.out.println("<<< [အောင်မြင်သည်]: ပစ္စည်းထုတ်ပေးလိုက်ပါပြီ။ လက်ကျန်အသစ်မှာ " + (currentQty - outQty) + " ဖြစ်သည်။");
                     return "SUCCESS";
                 } else {
+                    System.out.println("<<< [မအောင်မြင်ပါ]: လက်ကျန်မလုံလောက်ပါ။ (လက်ရှိ: " + currentQty + ")");
                     return "Insufficient Stock: Only " + currentQty + " units available.";
                 }
             }
@@ -1379,31 +1427,19 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
     // Notification and Setting
     @Override
     public List<Map<String, String>> getNotificationsForAdmin() throws RemoteException {
+        System.out.println("[Client Request]: Admin အတွက် အသိပေးချက်များ ရယူနေပါသည်။");
         List<Map<String, String>> list = new ArrayList<>();
         String sql = "SELECT action, timestamp FROM audit_logs ORDER BY timestamp DESC LIMIT 15";
-
-        try (Connection conn = DBConnection.getConnection();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-
+        try (Connection conn = DBConnection.getConnection(); PreparedStatement ps = conn.prepareStatement(sql)) {
             ResultSet rs = ps.executeQuery();
             while (rs.next()) {
                 Map<String, String> m = new HashMap<>();
                 m.put("title", rs.getString("action"));
-
-                Timestamp ts = rs.getTimestamp("timestamp");
-                if (ts != null) {
-                    m.put("date", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(ts));
-                } else {
-                    m.put("date", "N/A");
-                }
-
-                m.put("type", "system");
-                m.put("sub", "Security Log");
+                m.put("date", new SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(rs.getTimestamp("timestamp")));
+                m.put("type", "system"); m.put("sub", "စနစ်မှတ်တမ်း");
                 list.add(m);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        } catch (Exception e) { e.printStackTrace(); }
         return list;
     }
 
@@ -1447,6 +1483,7 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
     @Override
     public boolean updatePassword(int userId, String currentPass, String newPass, String role) throws RemoteException {
+        System.out.println("\n[RMI Call]: Security - Password change requested for User ID: " + userId);
         String query = "SELECT password_hash FROM users WHERE user_id = ?";
 
         try (Connection conn = DBConnection.getConnection();
@@ -1457,15 +1494,11 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
 
             if (rs.next()) {
                 String storedHash = rs.getString("password_hash");
-
-
                 if (storedHash != null && storedHash.startsWith("$2y$")) {
                     storedHash = storedHash.replaceFirst("\\$2y\\$", "\\$2a\\$");
                 }
 
-
                 if (BCrypt.checkpw(currentPass, storedHash)) {
-
                     String newHashed = BCrypt.hashpw(newPass, BCrypt.gensalt());
                     String updateQuery = "UPDATE users SET password_hash = ? WHERE user_id = ?";
 
@@ -1473,16 +1506,14 @@ public class InventoryServerImpl extends UnicastRemoteObject implements Inventor
                         psUpd.setString(1, newHashed);
                         psUpd.setInt(2, userId);
                         psUpd.executeUpdate();
-
-
                         logActivity(userId, "Security: Password synchronization completed by @" + role + "-Node");
+                        System.out.println("<<< [Success]: Password updated and synced.");
                         return true;
                     }
                 }
             }
-        } catch (SQLException e) {
-            e.printStackTrace();
-        }
+            System.out.println("<<< [Failed]: Current password incorrect.");
+        } catch (SQLException e) { e.printStackTrace(); }
         return false;
     }
 }

@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
 <%
     String activePage = (String) request.getAttribute("active_page");
@@ -5,6 +6,9 @@
 %>
 
 <style>
+    /* မြန်မာစာအတွက် Font ထည့်သွင်းခြင်း */
+    @import url('https://fonts.googleapis.com/css2?family=Pyidaungsu:wght@400;700&display=swap');
+
     .aside-container {
         width: 290px; height: calc(100vh - 40px); position: fixed;
         left: 20px; top: 20px; background: #2E5077; border-radius: 2.5rem;
@@ -12,6 +16,7 @@
         box-shadow: 0 25px 50px -12px rgba(46, 80, 119, 0.4); z-index: 1000;
         transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         border: 1px solid rgba(255, 255, 255, 0.1);
+        font-family: 'Pyidaungsu', sans-serif;
     }
 
     .flow-icon { position: absolute; color: rgba(121, 215, 190, 0.04); animation: floatY 18s linear infinite; pointer-events: none; }
@@ -59,64 +64,64 @@
             <div class="absolute -inset-1 bg-[#4DA1A9] rounded-2xl blur opacity-20"></div>
         </div>
         <h3 class="font-black text-lg tracking-tighter text-white uppercase italic">Omni <span class="text-[#79D7BE]">Inventory</span></h3>
-        <span class="text-[7px] font-bold text-[#4DA1A9] uppercase tracking-[0.4em] mt-1">Smart Warehouse ERP</span>
+        <span class="text-[8px] font-bold text-[#4DA1A9] uppercase tracking-[0.4em] mt-1">ကုန်ပစ္စည်းစီမံခန့်ခွဲမှုစနစ်</span>
     </div>
 
     <nav class="flex-1 space-y-0.5 px-1 overflow-y-auto scrollbar-hide">
 
         <a href="admin_dashboard.jsp" class="nav-item <%= activePage.equals("dashboard") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-th-large" style="color:#79D7BE"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Dashboard</span>
+            <span class="text-[11px] font-bold tracking-wide">ပင်မစာမျက်နှာ</span>
         </a>
 
         <a href="inventory.jsp" class="nav-item <%= activePage.equals("inventory") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-boxes-stacked" style="color:#FDE68A"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Inventory</span>
+            <span class="text-[11px] font-bold tracking-wide">လက်ကျန်စာရင်း</span>
         </a>
 
         <a href="branch_control.jsp" class="nav-item <%= activePage.equals("branches") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-network-wired" style="color:#BFDBFE"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Branches</span>
+            <span class="text-[11px] font-bold tracking-wide">ဌာနခွဲများ</span>
         </a>
 
         <a href="suppliers.jsp" class="nav-item <%= activePage.equals("suppliers") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-truck-ramp-box" style="color:#A5B4FC"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Suppliers</span>
+            <span class="text-[11px] font-bold tracking-wide">ကုန်သွင်းသူများ</span>
         </a>
 
         <a href="procurement.jsp" class="nav-item <%= activePage.equals("procurement") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-truck-loading" style="color:#F9A8D4"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Procurement</span>
+            <span class="text-[11px] font-bold tracking-wide">ဝယ်ယူမှုမှတ်တမ်း</span>
         </a>
 
         <a href="manage_requests.jsp" class="nav-item <%= activePage.equals("manage_requests") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-clipboard-check" style="color:#6EE7B7"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Requests</span>
+            <span class="text-[11px] font-bold tracking-wide">တောင်းဆိုမှုများ</span>
         </a>
 
         <a href="stock_transfer.jsp" class="nav-item <%= activePage.equals("transfer") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-right-left" style="color:#93C5FD"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Transfer</span>
+            <span class="text-[11px] font-bold tracking-wide">ပစ္စည်းလွှဲပြောင်းရန်</span>
         </a>
 
         <a href="order_stock.jsp" class="nav-item <%= activePage.equals("orders") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-cart-plus" style="color:#FDBA74"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Orders</span>
+            <span class="text-[11px] font-bold tracking-wide">အမှာစာများ</span>
         </a>
 
         <a href="shipment_tracking.jsp" class="nav-item <%= activePage.equals("shipments") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-shipping-fast" style="color:#79D7BE"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Tracking</span>
+            <span class="text-[11px] font-bold tracking-wide">လမ်းကြောင်းစစ်ဆေးရန်</span>
         </a>
 
         <a href="manage_users.jsp" class="nav-item <%= activePage.equals("manage_users") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-user-shield" style="color:#FBCFE8"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">User Roles</span>
+            <span class="text-[11px] font-bold tracking-wide">အသုံးပြုသူအဆင့်များ</span>
         </a>
 
         <a href="audit_logs.jsp" class="nav-item <%= activePage.equals("audit_logs") ? "active" : "" %>">
             <div class="icon-square"><i class="fa fa-clipboard-list" style="color:#86EFAC"></i></div>
-            <span class="text-[10px] uppercase font-bold tracking-wider">Audit Logs</span>
+            <span class="text-[11px] font-bold tracking-wide">စနစ်မှတ်တမ်းများ</span>
         </a>
     </nav>
 
@@ -128,10 +133,10 @@
                 <span class="absolute -bottom-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-[#2E5077] rounded-full"></span>
             </div>
             <div class="flex flex-col">
-                <span class="text-[9px] font-black text-[#F6F4F0] uppercase leading-none truncate w-20">
-                   <%= session.getAttribute("username") != null ? session.getAttribute("username") : "Admin" %>
+                <span class="text-[10px] font-bold text-[#F6F4F0] leading-none truncate w-20">
+                   <%= session.getAttribute("username") != null ? session.getAttribute("username") : "အက်ဒမင်" %>
                 </span>
-                <span class="text-[6px] text-[#79D7BE] font-bold uppercase tracking-widest mt-1">Administrator</span>
+                <span class="text-[7px] text-[#79D7BE] font-bold uppercase tracking-widest mt-1">အထူးအသုံးပြုသူ</span>
             </div>
         </div>
         <a href="../logout.jsp" class="w-7 h-7 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400 hover:bg-red-500 hover:text-white transition-all shadow-sm">

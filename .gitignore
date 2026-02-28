@@ -36,3 +36,4 @@ out/
 .project
 .classpath
 .settings/
+/.metadata/
